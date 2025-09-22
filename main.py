@@ -10,7 +10,7 @@ aktywny_user = None
 def log(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        print(f"[LOG] witam w funckji {func.__name__}")
+        print(f"[LOG] witam w funkcji {func.__name__}")
         result = func(*args, **kwargs)
         print(f"[LOG] koniec funkcji {func.__name__}")
         return result
@@ -23,16 +23,16 @@ def zaloguj(func):
     def wrapper(*args, **kwargs):
         global aktywny_user
         login = input("Podaj login: ").strip()
-        password = input("Podaj hasło:").strip()
+        password = input("Podaj hasło: ").strip()
         if login in users and users[login]["haslo"] == password:
-            print("dane poprawne")
+            print("Dane poprawne.")
+            if aktywny_user and aktywny_user in users:
+                users[aktywny_user]["zalogowany"] = False
             users[login]["zalogowany"] = True
             aktywny_user = login
-            results = func(*args, **kwargs)
-            return results
-        else:
-            print("Hasło lub login nieporawne spróbuj ponownie")
-            return
+            return func(*args, **kwargs)
+        print("Hasło lub login niepoprawne. Spróbuj ponownie.")
+        return None
 
     return wrapper
 
@@ -40,11 +40,11 @@ def zaloguj(func):
 def wymaga_logowania(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if not aktywny_user or not users[aktywny_user]["zalogowny"]:
-            print("musisz się zalogować")
-            return
-        results = func(*args, **kwargs)
-        return results
+        user = users.get(aktywny_user)
+        if not user or not user.get("zalogowany"):
+            print("Musisz się zalogować.")
+            return None
+        return func(*args, **kwargs)
 
     return wrapper
 
@@ -53,15 +53,14 @@ def poziom(min_poziom):
     def dekorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if not aktywny_user or not aktywny_user["zalogowny"]:
-                print("muszisz się zalogowac by mieć dostęp")
-                return
-
-            if aktywny_user["poziom"] < min_poziom:
-                print("brak dostępu za niskie uprawnienia ")
-                return
-            results = func(*args, **kwargs)
-            return results
+            user = users.get(aktywny_user)
+            if not user or not user.get("zalogowany"):
+                print("Musisz się zalogować, aby mieć dostęp.")
+                return None
+            if user["poziom"] < min_poziom:
+                print("Brak dostępu — zbyt niskie uprawnienia.")
+                return None
+            return func(*args, **kwargs)
 
         return wrapper
 
@@ -71,14 +70,12 @@ def poziom(min_poziom):
 def register():
     print("Witaj w menu rejestracji")
     login = input("Podaj login: ").strip()
-
     if login in users:
         print("❌ Użytkownik już istnieje!")
         return
-
     password = input("Podaj hasło: ").strip()
     users[login] = {"haslo": password, "zalogowany": False, "poziom": 1, "saldo": 0}
-    print("✅ Rejestracja zakończona!")
+    print("✅ Rejestracja zakończona! Możesz się teraz zalogować.")
 
 
 @wymaga_logowania
@@ -88,8 +85,9 @@ def pokaz_saldo():
 
 
 @log
+@zaloguj
 def logowanie():
-    print("witamy w menu logowowania ")
+    print("Witamy w menu logowania.")
 
 
 @log
@@ -103,25 +101,66 @@ def edytuj_dane():
 @log
 def wykonaj_przelew():
     try:
-        kwota = float(input("Podaj kwotę:"))
-
+        kwota = float(input("Podaj kwotę: "))
     except ValueError:
-        print("nieporawne dane ")
+        print("Niepoprawne dane.")
         return
-
-    odbiorca = input("Podaj imię odbiorcy: ").strip()
-
     if kwota < 0:
-        print("Kwota nie może być mniejsza niż 0")
-
-    if kwota > users[aktywny_user]["saldo"]:
-        print("Nie masz na tyle środków")
+        print("Kwota nie może być mniejsza niż 0.")
         return
+    if kwota > users[aktywny_user]["saldo"]:
+        print("Nie masz na tyle środków.")
+        return
+    odbiorca = input("Podaj imię odbiorcy: ").strip()
     users[aktywny_user]["saldo"] -= kwota
-    print(f"przelano {kwota} do {odbiorca}")
+    print(f"Przelano {kwota:.2f} do {odbiorca}.")
+
+
+def wyloguj():
+    global aktywny_user
+    if not aktywny_user:
+        print("Nikt nie jest zalogowany.")
+        return
+    users[aktywny_user]["zalogowany"] = False
+    print(f"Użytkownik {aktywny_user} został wylogowany.")
+    aktywny_user = None
 
 
 def menu():
     while True:
-        print("Witaj w menu")
-        # uznajmy że dalej jest opcja wybroru itp bo już nie chce mi się klikać xd
+        print("\n===== MENU GŁÓWNE =====")
+        status = f"Zalogowany jako: {aktywny_user}" if aktywny_user else "Brak zalogowanego użytkownika"
+        print(status)
+        print("1. Zaloguj")
+        print("2. Rejestracja")
+        print("3. Pokaż saldo")
+        print("4. Wykonaj przelew")
+        print("5. Edytuj dane (admin)")
+        print("6. Wyloguj")
+        print("0. Wyjdź")
+        wybor = input("Wybierz opcję: ").strip()
+
+        if wybor == "1":
+            logowanie()
+        elif wybor == "2":
+            register()
+        elif wybor == "3":
+            pokaz_saldo()
+        elif wybor == "4":
+            wykonaj_przelew()
+        elif wybor == "5":
+            edytuj_dane()
+        elif wybor == "6":
+            wyloguj()
+        elif wybor == "0":
+            print("Do zobaczenia!")
+            break
+        else:
+            print("Nieznana opcja, spróbuj ponownie.")
+
+
+if __name__ == "__main__":
+    try:
+        menu()
+    except KeyboardInterrupt:
+        print("\nPrzerwano przez użytkownika.")
